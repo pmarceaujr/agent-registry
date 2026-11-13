@@ -1,0 +1,23 @@
+services:
+    db:
+        image: postgres:16
+        environment:
+            POSTGRES_USER: registry
+            POSTGRES_PASSWORD: registry_dev_pw
+            POSTGRES_DB: registry
+        ports:
+            - "5432:5432"
+        volumes:
+            - pgdata:/var/lib/postgresql/data
+
+    api:
+        build: .
+        ports:
+            - "8000:8000"
+        environment:
+            DATABASE_URL: postgresql://registry:registry_dev_pw@db:5432/registry
+        depends_on:
+            - db
+
+volumes:
+    pgdata:
