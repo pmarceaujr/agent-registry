@@ -1,23 +1,31 @@
 services:
-    db:
-        image: postgres:16
-        environment:
-            POSTGRES_USER: registry
-            POSTGRES_PASSWORD: registry_dev_pw
-            POSTGRES_DB: registry
-        ports:
-            - "5432:5432"
-        volumes:
-            - pgdata:/var/lib/postgresql/data
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: registry
+      POSTGRES_PASSWORD: registry_dev_pw
+      POSTGRES_DB: registry
+    ports:
+      - "55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # pg_isready succeeds only when Postgres is accepting connections
+      test: ["CMD-SHELL", "pg_isready -U registry -d registry"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
-    api:
-        build: .
-        ports:
-            - "8000:8000"
-        environment:
-            DATABASE_URL: postgresql://registry:registry_dev_pw@db:5432/registry
-        depends_on:
-            - db
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Host is "db" (the service name) because this runs inside Docker
+      DATABASE_URL: postgresql+psycopg://registry:registry_dev_pw@db:5432/registry
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
-    pgdata:
+  pgdata:
