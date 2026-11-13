@@ -1,0 +1,15 @@
+
+# Virtual Env directory
+agreg/
+
+# Python files
+__pycache__/
+
+# DOT ENV files
+.env
+
+# Git files
+.git/
+
+#  My notes files
+zInstallNotes.md
