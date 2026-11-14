@@ -1,5 +1,6 @@
-import uuid
 from datetime import datetime
+from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -23,9 +24,23 @@ class AgentRead(BaseModel):
     """What the API returns."""
     model_config = ConfigDict(from_attributes=True)  # lets Pydantic read SQLAlchemy objects
 
-    id: uuid.UUID
+    id: UUID
     name: str
     description: str | None
-    current_version_id: uuid.UUID | None
+    current_version_id: UUID | None
     created_at: datetime
     updated_at: datetime
+
+class VersionCreate(BaseModel):
+    # Free-form JSON for now; min_length=1 rejects an empty {} with a 422
+    config: dict[str, Any] = Field(min_length=1)
+
+
+class VersionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    agent_id: UUID
+    version_number: int
+    config: dict[str, Any]
+    created_at: datetime    
