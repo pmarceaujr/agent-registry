@@ -44,3 +44,13 @@ class VersionRead(BaseModel):
     version_number: int
     config: dict[str, Any]
     created_at: datetime    
+
+class RollbackRequest(BaseModel):
+    version_number: int = Field(ge=1)   # 0 or negative -> 422
+
+
+class RollbackResult(BaseModel):
+    agent_id: UUID
+    previous_version_number: int | None
+    current_version_number: int
+    current_version_id: UUID    

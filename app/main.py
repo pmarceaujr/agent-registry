@@ -8,6 +8,7 @@ from app.database import get_db
 app = FastAPI(title="Agent Registry", version="0.1.0")
 app.include_router(agents.router, prefix="/v1")
 app.include_router(versions.router, prefix="/v1")
+app.include_router(versions.agent_actions, prefix="/v1")
 
 
 @app.get("/health")

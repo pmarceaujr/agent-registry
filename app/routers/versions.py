@@ -7,9 +7,10 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Agent, AgentVersion
-from app.schemas import VersionCreate, VersionRead
+from app.schemas import RollbackRequest, RollbackResult, VersionCreate, VersionRead
 
 router = APIRouter(prefix="/agents/{agent_id}/versions", tags=["versions"])
+agent_actions = APIRouter(prefix="/agents/{agent_id}", tags=["versions"])
 
 
 def get_agent_or_404(db: Session, agent_id: UUID, lock: bool = False) -> Agent:
@@ -70,6 +71,16 @@ def list_versions(
     )
     return db.scalars(stmt).all()
 
+@router.get("/current", response_model=VersionRead)
+def get_current_version(agent_id: UUID, db: Session = Depends(get_db)):
+    agent = get_agent_or_404(db, agent_id)
+    if agent.current_version_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent has no published version",
+        )
+    return db.get(AgentVersion, agent.current_version_id)
+
 
 @router.get("/{version_number}", response_model=VersionRead)
 def get_version(agent_id: UUID, version_number: int, db: Session = Depends(get_db)):
@@ -83,3 +94,45 @@ def get_version(agent_id: UUID, version_number: int, db: Session = Depends(get_d
     if version is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
     return version
+
+
+@agent_actions.post("/rollback", response_model=RollbackResult)
+def rollback(agent_id: UUID, payload: RollbackRequest, db: Session = Depends(get_db)):
+    # Lock the agent row so a publish and a rollback can't race each other
+    agent = get_agent_or_404(db, agent_id, lock=True)
+
+    # Look up the target version scoped to THIS agent
+    target = db.scalars(
+        select(AgentVersion).where(
+            AgentVersion.agent_id == agent.id,
+            AgentVersion.version_number == payload.version_number,
+        )
+    ).first()
+    if target is None:
+        db.rollback()   # release the lock before returning
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Version {payload.version_number} not found for this agent",
+        )
+
+    previous_number = None
+    if agent.current_version_id is not None:
+        previous_number = db.scalar(
+            select(AgentVersion.version_number).where(AgentVersion.id == agent.current_version_id)
+        )
+
+    # Save plain values now; after commit(), SQLAlchemy expires loaded objects
+    target_id, target_number = target.id, target.version_number
+
+    if agent.current_version_id != target_id:
+        agent.current_version_id = target_id
+        agent.updated_at = func.now()
+
+    db.commit()   # also releases the row lock
+
+    return RollbackResult(
+        agent_id=agent_id,
+        previous_version_number=previous_number,
+        current_version_number=target_number,
+        current_version_id=target_id,
+    )
